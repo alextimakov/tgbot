@@ -1,0 +1,15 @@
+name: tgbot
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - ipython
+  - jupyter==1.0.0
+  - notebook==5.5
+  - pandas==0.23
+  - numpy==1.13.3
+  - python==3.6.5
+  - setuptools
+  - ipykernel==4.8
+  - pip:
+    - python-telegram-bot==10.1

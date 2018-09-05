@@ -102,3 +102,9 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# specific files
+config.py
+
+# pycharm files
+**/.idea
