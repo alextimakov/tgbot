@@ -24,11 +24,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-user_base = db.setup('db1.csv')
+user_base = db.setup('./db/db1.csv')
 
-news_base = db.setup('db2.csv')
+news_base = db.setup('./db/db2.csv')
 
-attach_base = db.setup('db3.csv')
+attach_base = db.setup('./db/db3.csv')
 
 
 # Global vars:
@@ -159,8 +159,7 @@ def send_news(bot, update):
 def answer(bot, update):
     user = update.message.from_user
     logger.info("Руководитель проверил обновления %s", user.first_name)
-    last = db.setup('db2.csv')
-    base = last.loc[last['boss_id'] == user.id]
+    base = news_base.loc[news_base['boss_id'] == user.id]
     # add iterative check of status
     if base['status'][-1:] is not False:
         if not base['text'][-1:].empty:
@@ -178,8 +177,7 @@ def answer(bot, update):
 
 def answer_result(bot, update):
     user = update.message.from_user
-    last = db.setup('db2.csv')
-    base = last.loc[last['boss_id'] == user.id]
+    base = news_base.loc[news_base['boss_id'] == user.id]
     if str(update.message.text) == 'ОК':
         logger.info("2 шаг согласования")
         bot.send_message(chat_id=channel_name, text=update.message.text)
@@ -193,12 +191,11 @@ def answer_result(bot, update):
 
 # general functions
 def callback_alarm(bot, job):
-    last = db.setup('db2.csv')
     current_time = calendar.timegm(time.gmtime())
-    rem_check = int(last['time'].loc[last['user_id'] == job.context][-1:])
+    rem_check = int(news_base['time'].loc[news_base['user_id'] == job.context][-1:])
     if int(current_time - rem_check) >= 120:
         logger.info("Проверено, как давно была написана новость")
-        bot.send_message(chat_id=int(last['user_id'].loc[last['user_id'] == job.context][-1:]),
+        bot.send_message(chat_id=int(news_base['user_id'].loc[news_base['user_id'] == job.context][-1:]),
                          text='Пора написать новость')
 
 
@@ -279,5 +276,6 @@ def main():
 
 
 if __name__ == '__main__':
+    main()
     updater.start_polling(clean=True)
     updater.idle()
