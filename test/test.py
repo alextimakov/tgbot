@@ -1,26 +1,23 @@
-# multiprocessing test
-from multiprocessing import Pool
-from time import sleep
+import src.dbhelper as db_hp
+from src.scripts import *
 
 
-def f(x):
-    return x*x
+def main():
+    auth = db_hp.SQLighter('db.sqlite')
+    boss_uid = auth.select_boss_id(125500294)
+    number_answers = auth.count_news(boss_uid)
+    for i in reversed(range(number_answers)):
+        while i > 0:
+            print(auth.check_news(boss_uid)[-i:])
+            i -= 1
+    print(3)
 
+
+# if auth.check_news(boss_uid)[-i:]:
+#     print(answer_pos['RU'])
+#     print(''.join(auth.check_news(boss_uid)[-i:]))
+# else:
+#     print(answer_neg['RU'])
 
 if __name__ == '__main__':
-    with Pool(processes=4) as pool:
-
-        # print "[0, 1, 4,..., 81]"
-        print(pool.map(f, range(10)))
-
-        # print same numbers in arbitrary order
-        for i in pool.imap_unordered(f, range(10)):
-            print(i)
-
-        # evaluate "f(10)" asynchronously
-        res = pool.apply_async(f, [10])
-        print(res.get(timeout=1))             # prints "100"
-
-        # make worker sleep for 10 secs
-        res = pool.apply_async(sleep, [10])
-        print(res.get(timeout=1))
+    main()
