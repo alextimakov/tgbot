@@ -1,4 +1,4 @@
-name: tgbot
+name: src
 channels:
   - conda-forge
   - defaults

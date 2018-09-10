@@ -7,9 +7,9 @@ def read(name):
 
 
 setup(
-    name="tgbot",
+    name="src",
 
-    description="tgbot project structure",
+    description="src project structure",
 
     author="Alex Timakov",
 

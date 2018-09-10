@@ -2,13 +2,13 @@ from telegram import (ReplyKeyboardMarkup, ReplyKeyboardRemove)
 from telegram.ext import (Updater, CommandHandler, MessageHandler, Filters, ConversationHandler, RegexHandler)
 import time
 import calendar
-import tgbot.config as config
-import tgbot.db as db
-from tgbot.scripts import *
+import src.config as config
+import src.db as db
+from src.scripts import *
 import threading
 import logging
 # import multiprocessing as mp
-# import sqlite3
+import src.dbhelper as dbhelper
 
 channel_name = '@findaride'
 
@@ -20,15 +20,14 @@ j = updater.job_queue
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO)
-
 logger = logging.getLogger(__name__)
 
+# databases
+user_base = db.setup('db1.csv')
 
-user_base = db.setup('./db/db1.csv')
+news_base = db.setup('db2.csv')
 
-news_base = db.setup('./db/db2.csv')
-
-attach_base = db.setup('./db/db3.csv')
+attach_base = db.setup('db3.csv')
 
 
 # Global vars:
@@ -82,9 +81,6 @@ def set_state(bot, update):
         STATE = NO_ATTACH
         no_attachment(bot, update)
         return SENT
-    elif update.message.text == reminder_text['RU']:
-        STATE = MENU
-        return MENU
     else:
         STATE = MENU
         return MENU
@@ -170,19 +166,20 @@ def answer(bot, update):
             return RESULT
         else:
             bot.send_message(chat_id=user.id, text='У вас нет прав для согласования. Вернитесь в /menu')
-            return
+            return MENU
     else:
         return MENU
 
 
 def answer_result(bot, update):
     user = update.message.from_user
-    base = news_base.loc[news_base['boss_id'] == user.id]
+    last = db.setup('db2.csv')
+    base = last.loc[last['boss_id'] == user.id]
     if str(update.message.text) == 'ОК':
-        logger.info("2 шаг согласования")
+        logger.info("2 шаг согласования OK")
         bot.send_message(chat_id=channel_name, text=update.message.text)
     else:
-        logger.info("2 - else шаг согласования")
+        logger.info("2 шаг согласования - else")
         bot.send_message(chat_id=int(base['user_id'][-1:]), text=update.message.text)
     # base['status'][-1:] = True
     logger.info("Ответ руководителя %s: %s", user.first_name, update.message.text)
@@ -191,12 +188,13 @@ def answer_result(bot, update):
 
 # general functions
 def callback_alarm(bot, job):
+    last = db.setup('db2.csv')
     current_time = calendar.timegm(time.gmtime())
-    rem_check = int(news_base['time'].loc[news_base['user_id'] == job.context][-1:])
+    rem_check = int(last['time'].loc[last['user_id'] == job.context][-1:])
     if int(current_time - rem_check) >= 120:
         logger.info("Проверено, как давно была написана новость")
-        bot.send_message(chat_id=int(news_base['user_id'].loc[news_base['user_id'] == job.context][-1:]),
-                         text='Пора написать новость')
+        bot.send_message(chat_id=int(last['user_id'].loc[last['user_id'] == job.context][-1:]),
+                         text=reminder_text['RU'])
 
 
 def callback_timer(bot, update, job_queue):
