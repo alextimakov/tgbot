@@ -23,19 +23,30 @@ class SQLighter:
                                 {"value": value, "cond": cond})
             self.connection.commit()
 
-    def update_news_start(self, values):
+    def update_news_start(self, id, status, user_id, boss_id):
         with self.connection:
-            self.cursor.execute('INSERT INTO news_base (id, status, user_id, boss_id) VALUES (?,?,?,?)', values)
+            self.cursor.execute('INSERT INTO news_base (id, status, user_id, boss_id) VALUES (?,?,?,?)',
+                                (id, status, user_id, boss_id))
             self.connection.commit()
 
     def update_news_attach(self, attach, key):
         with self.connection:
-            self.cursor.execute('UPDATE news_base SET file_id  = ? WHERE id = ?', (attach, key))
+            self.cursor.execute('UPDATE news_base SET file_id  = ? WHERE id = ?', (attach, key, ))
             self.connection.commit()
 
     def update_news_text(self, time, text, key):
         with self.connection:
-            self.cursor.execute('UPDATE news_base SET time = ?, news_text = ? WHERE id = ?', (time, text, key))
+            self.cursor.execute('UPDATE news_base SET time = ?, news_text = ? WHERE id = ?', (time, text, key, ))
+            self.connection.commit()
+
+    def update_news_status(self, status, text):
+        with self.connection:
+            self.cursor.execute('UPDATE news_base SET status = ? WHERE news_text = ?', (status, text, ))
+            self.connection.commit()
+
+    def update_news_answer(self, answer, text):
+        with self.connection:
+            self.cursor.execute('UPDATE news_base SET answer = ? WHERE news_text = ?', (answer, text, ))
             self.connection.commit()
 
     def select_all(self):
@@ -72,14 +83,26 @@ class SQLighter:
             result = self.cursor.execute('SELECT * FROM user_boss').fetchall()
             return len(result)
 
-    def count_news(self, boss_id):
+    def count_news(self, boss_id, status):
         with self.connection:
-            result = self.cursor.execute('SELECT * FROM news_base WHERE boss_id = ? and status = 0', boss_id).fetchall()
+            result = self.cursor.execute('SELECT * FROM news_base WHERE boss_id = ? and status = ?',
+                                         (boss_id, status, )).fetchall()
             return len(result)
+
+    # переделать
+    def check_id(self, id1):
+        with self.connection:
+            self.cursor.execute('SELECT user_id, boss_id FROM user_boss WHERE user_id = ?', (id1, ))
+            results = self.cursor.fetchall()
+            return results
 
     def check_news(self, boss_id):
         with self.connection:
-            return self.cursor.execute('SELECT news_text FROM news_base WHERE boss_id = ?', boss_id).fetchall()
+            return self.cursor.execute('SELECT news_text FROM news_base WHERE boss_id = ?', (boss_id, )).fetchall()
+
+    def check_time(self, user):
+        with self.connection:
+            return self.cursor.execute('SELECT time FROM news_base WHERE user_id = ?', (user, )).fetchall()
 
     def close(self):
         self.connection.close()

@@ -3,17 +3,16 @@ from telegram.ext import (Updater, CommandHandler, MessageHandler, Filters, Conv
 import time
 import calendar
 import src.config as config
-import src.db as db
 from src.scripts import *
 import logging
-# from multiprocessing import Pool
+from multiprocessing import Process
 import src.dbhelper as db_hp
 
 channel_name = '@findaride'
 
 updater = Updater(config.token)  # Токен API к Telegram
 dp = updater.dispatcher
-j = updater.job_queue
+# j = updater.job_queue
 
 # Enable logging
 logging.basicConfig(
@@ -30,8 +29,6 @@ unique_token = 0
 
 def start(bot, update):
     user = update.message.from_user
-    global unique_token
-    unique_token = update.message.message_id
     auth = db_hp.SQLighter('db.sqlite')
     all_ids = []
     for i in range(auth.count_rows()):
@@ -54,6 +51,8 @@ def menu(bot, update):
                                        resize_keyboard=True)
 
     user = update.message.from_user
+    global unique_token
+    unique_token = update.message.message_id
     logger.info("Меню вызвано пользователем {}.".format(user.first_name))
     update.message.reply_text(menu_text['RU'], reply_markup=reply_markup)
     return SET_STATE
@@ -126,7 +125,10 @@ def news(bot, update):
     update.message.reply_text(attach_req['RU'])
     auth = db_hp.SQLighter('db.sqlite')
     boss_uid = auth.select_boss_id(user.id)[0]
-    auth.update_news_start(values=[unique_token, 0, user.id, boss_uid])
+    if len(auth.check_id(id1=125500293)[0]) >= 1:
+        auth.update_news_start(id=unique_token, status=0, user_id=user.id, boss_id=boss_uid)
+    else:
+        bot.send_message(chat_id=update.message.chat_id, text=user_not_found['RU'])
     return
 
 
@@ -149,6 +151,9 @@ def no_attachment(bot, update):
     user = update.message.from_user
     logger.info("Информация о боте запрошена пользователем {}.".format(user.first_name))
     bot.send_message(chat_id=update.message.chat_id, text=news_req['RU'])
+    auth = db_hp.SQLighter('db.sqlite')
+    boss_uid = auth.select_boss_id(user.id)[0]
+    auth.update_news_start(id=unique_token, status=0, user_id=user.id, boss_id=boss_uid)
     return SENT
 
 
@@ -171,86 +176,74 @@ def answer(bot, update):
     user = update.message.from_user
     logger.info("Руководитель проверил обновления %s", user.first_name)
     auth = db_hp.SQLighter('db.sqlite')
-    boss_uid = auth.select_boss_id(user.id)
-    number_answers = auth.count_news(boss_uid)
-    for i in reversed(range(number_answers)):
-        while i > 0:
-            if auth.check_news(boss_uid)[-i:]:
-                bot.send_message(chat_id=user.id, text=answer_pos['RU'])
-                bot.send_message(chat_id=user.id, text=''.join(auth.check_news(boss_uid)[-i:]))
-                i -= 1
-                logger.info("1 шаг согласования - проверка")
-                return RESULT
-            else:
-                bot.send_message(chat_id=user.id, text=answer_neg['RU'])
-                logger.info("1 шаг согласования - нет новостей")
-                return MENU
-    return MENU
-
-# def answer(bot, update):
-#     user = update.message.from_user
-#     logger.info("Руководитель проверил обновления %s", user.first_name)
-#     base = news_base.loc[news_base['boss_id'] == user.id]
-#     # add iterative check of status
-#     if base['status'][-1:] is not False:
-#         if not base['text'][-1:].empty:
-#             bot.send_message(chat_id=user.id, text='Поставьте ОК если согласовано, '
-#                                                    'напишите комментарий в противном случае')
-#             bot.send_message(chat_id=user.id, text=''.join(base['text'][-1:]))
-#             logger.info("1 шаг согласования")
-#             return RESULT
-#         else:
-#             bot.send_message(chat_id=user.id, text='У вас нет прав для согласования. Вернитесь в /menu')
-#             return MENU
-#     else:
-#         return MENU
+    user_uid = auth.select_user_id(user.id)
+    number_answers = auth.count_news(boss_id=user.id, status=0)-1
+    if user_uid:
+        if number_answers >= 0:
+            bot.send_message(chat_id=user.id, text=answer_pos['RU'])
+            bot.send_message(chat_id=user.id, text=''.join(auth.check_news(user.id)[-1*number_answers]))
+            logger.info("1 шаг согласования - проверка")
+            return RESULT
+        else:
+            bot.send_message(chat_id=user.id, text=answer_neg['RU'])
+            logger.info("1 шаг согласования - нет новостей")
+            return MENU
+    else:
+        bot.send_message(chat_id=user.id, text=answer_rights['RU'])
+        return MENU
 
 
 def answer_result(bot, update):
     user = update.message.from_user
     auth = db_hp.SQLighter('db.sqlite')
     user_uid = auth.select_user_id(user.id)
+    number_answers = auth.count_news(boss_id=user.id, status=0) - 1
+    answer_text = auth.check_news(user.id)[-1 * number_answers]
     if str(update.message.text) == 'ОК':
         logger.info("2 шаг согласования - OK")
+        auth.update_news_status(status=1, text=answer_text[0])
         bot.send_message(chat_id=channel_name, text=update.message.text)
     else:
         logger.info("2 шаг согласования - else")
-        bot.send_message(chat_id=int(user_uid), text=update.message.text)
-    # base['status'][-1:] = True
+        auth.update_news_answer(answer=update.message.text, text=answer_text[0])
+        bot.send_message(chat_id=user_uid[0], text=update.message.text)
     logger.info("Ответ руководителя %s: %s", user.first_name, update.message.text)
     bot.send_message(chat_id=user.id, text=back2menu['RU'])
     return MENU
 
 
-# def answer_result(bot, update):
-#     user = update.message.from_user
-#     last = db.setup('db2.csv')
-#     base = last.loc[last['boss_id'] == user.id]
-#     if str(update.message.text) == 'ОК':
-#         logger.info("2 шаг согласования OK")
-#         bot.send_message(chat_id=channel_name, text=update.message.text)
-#     else:
-#         logger.info("2 шаг согласования - else")
-#         bot.send_message(chat_id=int(base['user_id'][-1:]), text=update.message.text)
-#     # base['status'][-1:] = True
-#     logger.info("Ответ руководителя %s: %s", user.first_name, update.message.text)
-#     bot.send_message(chat_id=user.id, text=back2menu['RU'])
-#     return MENU
-
 # general functions
-def callback_alarm(bot, job):
-    last = db.setup('db2.csv')
+# def callback_alarm(bot, job):
+#     global current_time
+#     current_time = calendar.timegm(time.gmtime())
+#     auth = db_hp.SQLighter('db.sqlite')
+#     rem_check = auth.check_time(job.context)[-1][0]
+#     if int(current_time - rem_check) >= 120:
+#         logger.info("Проверено, как давно была написана новость")
+#         print(reminder_text['RU'])
+#
+#
+# def callback_timer(bot, update, job_queue):
+#     bot.send_message(chat_id=update.message.chat_id, text='Пройдите, пожалуйста, в /menu')
+#     job_queue.run_repeating(callback_alarm, 20, context=update.message.chat_id)
+
+FLAG = True
+
+
+def callback(bot):
+    auth = db_hp.SQLighter('db.sqlite')
+    global current_time
     current_time = calendar.timegm(time.gmtime())
-    rem_check = int(last['time'].loc[last['user_id'] == job.context][-1:])
-    if int(current_time - rem_check) >= 120:
-        logger.info("Проверено, как давно была написана новость")
-        bot.send_message(chat_id=int(last['user_id'].loc[last['user_id'] == job.context][-1:]),
-                         text=reminder_text['RU'])
-
-
-def callback_timer(bot, update, job_queue):
-    bot.send_message(chat_id=update.message.chat_id, text='Пройдите, пожалуйста, в /menu')
-    job_queue.run_repeating(callback_alarm, 20, context=update.message.chat_id)
+    while FLAG:
+        rem_check = auth.check_time(125500294)[-1][0]
+        if int(current_time - rem_check) >= 120:
+            logger.info("Новость написана давно")
+            bot.send_message(chat_id=125500294, text=reminder_text['RU'])
+            time.sleep(60)
+        else:
+            logger.info("Новость написана недавно")
+            pass
+    pass
 
 
 def help(bot, update):
@@ -263,7 +256,7 @@ def help(bot, update):
 def cancel(bot, update):
     user = update.message.from_user
     logger.info("ПОльзователь {} прервал диалог.".format(user.first_name))
-    update.message.reply_text(text='Перезапуск диалога',
+    update.message.reply_text(text=cancel_text['RU'],
                               reply_markup=ReplyKeyboardRemove())
 
     return ConversationHandler.END
@@ -275,10 +268,10 @@ def error(bot, update, error):
 
 def main():
     # create handlers
-    timer_handler = CommandHandler('timer', callback_timer, pass_job_queue=True)
+    # timer_handler = CommandHandler('timer', callback_timer, pass_job_queue=True)
 
     # add handlers
-    dp.add_handler(timer_handler)
+    # dp.add_handler(timer_handler)
 
     # Add conversation handler with predefined states:
     conversation_handler = ConversationHandler(
@@ -314,5 +307,8 @@ def main():
 
 if __name__ == '__main__':
     main()
+    bot = updater.bot
+    p = Process(target=callback, args=(bot, ))
+    p.start()
     updater.start_polling(clean=True)
     updater.idle()
