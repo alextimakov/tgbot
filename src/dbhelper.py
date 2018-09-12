@@ -89,12 +89,10 @@ class SQLighter:
                                          (boss_id, status, )).fetchall()
             return len(result)
 
-    # переделать
-    def check_id(self, id1):
+    def fetch_id(self):
         with self.connection:
-            self.cursor.execute('SELECT user_id, boss_id FROM user_boss WHERE user_id = ?', (id1, ))
-            results = self.cursor.fetchall()
-            return results
+            result = self.cursor.execute('SELECT user_id FROM user_boss').fetchall()
+            return result
 
     def check_news(self, boss_id):
         with self.connection:

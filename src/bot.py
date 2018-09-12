@@ -10,9 +10,8 @@ import src.dbhelper as db_hp
 
 channel_name = '@findaride'
 
-updater = Updater(config.token)  # Токен API к Telegram
+updater = Updater(token=config.token, request_kwargs={'read_timeout': 6, 'connect_timeout': 7})  # Токен API к Telegram
 dp = updater.dispatcher
-# j = updater.job_queue
 
 # Enable logging
 logging.basicConfig(
@@ -92,7 +91,6 @@ def login(bot, update):
 def check(bot, update):
     user = update.message.from_user
     logger.info("{} отправил логин.".format(user.first_name))
-    update.message.reply_text(login_acq['RU'])
     uid = update.message.text.lower()
     auth = db_hp.SQLighter('db.sqlite')
     all_users = []
@@ -121,12 +119,12 @@ def check(bot, update):
 # news procedure
 def news(bot, update):
     user = update.message.from_user
-    logger.info("%s начал писать новость", user.first_name)
+    logger.info("%s начал писать новость с приложением", user.first_name)
     update.message.reply_text(attach_req['RU'])
     auth = db_hp.SQLighter('db.sqlite')
-    boss_uid = auth.select_boss_id(user.id)[0]
-    if len(auth.check_id(id1=125500293)[0]) >= 1:
-        auth.update_news_start(id=unique_token, status=0, user_id=user.id, boss_id=boss_uid)
+    boss_uid = auth.select_boss_id(user.id)
+    if auth.select_boss_id(user.id):
+        auth.update_news_start(id=unique_token, status=0, user_id=user.id, boss_id=boss_uid[0])
     else:
         bot.send_message(chat_id=update.message.chat_id, text=user_not_found['RU'])
     return
@@ -149,11 +147,14 @@ def send_photo(bot, update):
 # news without attachment
 def no_attachment(bot, update):
     user = update.message.from_user
-    logger.info("Информация о боте запрошена пользователем {}.".format(user.first_name))
+    logger.info("{} начал писать новость без приложения.".format(user.first_name))
     bot.send_message(chat_id=update.message.chat_id, text=news_req['RU'])
     auth = db_hp.SQLighter('db.sqlite')
-    boss_uid = auth.select_boss_id(user.id)[0]
-    auth.update_news_start(id=unique_token, status=0, user_id=user.id, boss_id=boss_uid)
+    boss_uid = auth.select_boss_id(user.id)
+    if auth.select_boss_id(user.id):
+        auth.update_news_start(id=unique_token, status=0, user_id=user.id, boss_id=boss_uid[0])
+    else:
+        bot.send_message(chat_id=update.message.chat_id, text=user_not_found['RU'])
     return SENT
 
 
@@ -202,47 +203,43 @@ def answer_result(bot, update):
     if str(update.message.text) == 'ОК':
         logger.info("2 шаг согласования - OK")
         auth.update_news_status(status=1, text=answer_text[0])
-        bot.send_message(chat_id=channel_name, text=update.message.text)
+        bot.send_message(chat_id=channel_name, text=answer_text[0])
+        bot.send_message(chat_id=user.id, text=answer_sent_mods['RU'])
+        # if len(file_id) >1
     else:
         logger.info("2 шаг согласования - else")
         auth.update_news_answer(answer=update.message.text, text=answer_text[0])
+        bot.send_message(chat_id=user_uid[0], text=answer_acq_user['RU'])
         bot.send_message(chat_id=user_uid[0], text=update.message.text)
+        bot.send_message(chat_id=user.id, text=answer_sent_user['RU'])
     logger.info("Ответ руководителя %s: %s", user.first_name, update.message.text)
     bot.send_message(chat_id=user.id, text=back2menu['RU'])
     return MENU
 
 
 # general functions
-# def callback_alarm(bot, job):
-#     global current_time
-#     current_time = calendar.timegm(time.gmtime())
-#     auth = db_hp.SQLighter('db.sqlite')
-#     rem_check = auth.check_time(job.context)[-1][0]
-#     if int(current_time - rem_check) >= 120:
-#         logger.info("Проверено, как давно была написана новость")
-#         print(reminder_text['RU'])
-#
-#
-# def callback_timer(bot, update, job_queue):
-#     bot.send_message(chat_id=update.message.chat_id, text='Пройдите, пожалуйста, в /menu')
-#     job_queue.run_repeating(callback_alarm, 20, context=update.message.chat_id)
-
 FLAG = True
 
 
 def callback(bot):
-    auth = db_hp.SQLighter('db.sqlite')
-    global current_time
-    current_time = calendar.timegm(time.gmtime())
     while FLAG:
-        rem_check = auth.check_time(125500294)[-1][0]
-        if int(current_time - rem_check) >= 120:
-            logger.info("Новость написана давно")
-            bot.send_message(chat_id=125500294, text=reminder_text['RU'])
-            time.sleep(60)
-        else:
-            logger.info("Новость написана недавно")
-            pass
+        auth = db_hp.SQLighter('db.sqlite')
+        global current_time
+        current_time = calendar.timegm(time.gmtime())
+        for i in range(auth.count_rows()):
+            user = auth.fetch_id()
+            if len(str(user[i][0])) >= 5:
+                rem_check = auth.check_time(user[i][0])[-1][0]
+                if int(current_time - rem_check) >= (60*60*24*7):
+                    bot.send_message(chat_id=user[i][0], text=reminder_text['RU'])
+                    logger.info("Новость написана давно %s", user[i][0])
+                    time.sleep(60 * 60 * 24)
+                    pass
+                else:
+                    time.sleep(1)
+                    pass
+            else:
+                pass
     pass
 
 
@@ -267,12 +264,6 @@ def error(bot, update, error):
 
 
 def main():
-    # create handlers
-    # timer_handler = CommandHandler('timer', callback_timer, pass_job_queue=True)
-
-    # add handlers
-    # dp.add_handler(timer_handler)
-
     # Add conversation handler with predefined states:
     conversation_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
@@ -311,4 +302,3 @@ if __name__ == '__main__':
     p = Process(target=callback, args=(bot, ))
     p.start()
     updater.start_polling(clean=True)
-    updater.idle()
