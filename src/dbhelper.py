@@ -57,6 +57,11 @@ class SQLighter:
         with self.connection:
             return self.cursor.execute('SELECT user FROM user_boss').fetchall()
 
+    def select_user_by_id(self, id):
+        with self.connection:
+            result = self.cursor.execute('SELECT user FROM user_boss WHERE user_id = ?', (id, )).fetchone()
+            return result
+
     def select_user_id(self, boss):
         with self.connection:
             return self.cursor.execute('SELECT user_id FROM user_boss WHERE boss_id = :boss', {"boss": boss}).fetchone()
@@ -92,6 +97,11 @@ class SQLighter:
     def fetch_id(self):
         with self.connection:
             result = self.cursor.execute('SELECT user_id FROM user_boss').fetchall()
+            return result
+
+    def fetch_file_id(self, text):
+        with self.connection:
+            result = self.cursor.execute('SELECT file_id FROM news_base WHERE news_text = ?', (text, )).fetchone()
             return result
 
     def check_news(self, boss_id):

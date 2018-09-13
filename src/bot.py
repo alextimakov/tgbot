@@ -29,6 +29,7 @@ unique_token = 0
 def start(bot, update):
     user = update.message.from_user
     auth = db_hp.SQLighter('db.sqlite')
+    bot.send_message(chat_id=user.id, text=welcome_text['RU'])
     all_ids = []
     for i in range(auth.count_rows()):
         all_ids.extend([auth.select_all()[i][2], auth.select_all()[i][3]])
@@ -113,6 +114,7 @@ def check(bot, update):
         return MENU
     else:
         bot.send_message(chat_id=update.message.chat_id, text=login_check_fail['RU'])
+        bot.send_message(chat_id=update.message.chat_id, text=back2menu['RU'])
         return CHECK
 
 
@@ -134,8 +136,6 @@ def news(bot, update):
 def send_photo(bot, update):
     user = update.message.from_user
     auth = db_hp.SQLighter('db.sqlite')
-    boss_uid = auth.select_boss_id(user.id)[0]
-    bot.send_photo(chat_id=boss_uid, photo=update.message.photo[-1].file_id)
     logger.info("%s отправил фотографию", user.first_name)
     photo = str(update.message.photo[-1].file_id)
     auth.update_news_attach(attach=photo, key=unique_token)
@@ -153,6 +153,7 @@ def no_attachment(bot, update):
     boss_uid = auth.select_boss_id(user.id)
     if auth.select_boss_id(user.id):
         auth.update_news_start(id=unique_token, status=0, user_id=user.id, boss_id=boss_uid[0])
+        auth.update_news_attach(attach=0, key=unique_token)
     else:
         bot.send_message(chat_id=update.message.chat_id, text=user_not_found['RU'])
     return SENT
@@ -162,7 +163,7 @@ def send_news(bot, update):
     user = update.message.from_user
     auth = db_hp.SQLighter('db.sqlite')
     boss_uid = auth.select_boss_id(user.id)[0]
-    bot.send_message(chat_id=boss_uid, text=update.message.text)
+    bot.send_message(chat_id=boss_uid, text=new_news['RU'])
     logger.info("%s отправил текст новости", user.first_name)
     post_time = calendar.timegm(time.gmtime())
     auth.update_news_text(time=post_time, text=update.message.text, key=unique_token)
@@ -182,6 +183,8 @@ def answer(bot, update):
     if user_uid:
         if number_answers >= 0:
             bot.send_message(chat_id=user.id, text=answer_pos['RU'])
+            bot.send_message(chat_id=user.id,
+                             text='Новость получена от {}'.format(auth.select_user_by_id(id=user_uid[0])[0]))
             bot.send_message(chat_id=user.id, text=''.join(auth.check_news(user.id)[-1*number_answers]))
             logger.info("1 шаг согласования - проверка")
             return RESULT
@@ -203,17 +206,21 @@ def answer_result(bot, update):
     if str(update.message.text) == 'ОК':
         logger.info("2 шаг согласования - OK")
         auth.update_news_status(status=1, text=answer_text[0])
-        bot.send_message(chat_id=channel_name, text=answer_text[0])
         bot.send_message(chat_id=user.id, text=answer_sent_mods['RU'])
-        # if len(file_id) >1
+        bot.send_message(chat_id=user.id, text=back2menu['RU'])
+        bot.send_message(chat_id=channel_name, text=answer_text[0])
+        if auth.fetch_file_id(text=answer_text[0])[0] != 0:
+            bot.send_photo(chat_id=channel_name, photo=auth.fetch_file_id(text=answer_text[0])[0])
+        else:
+            pass
     else:
         logger.info("2 шаг согласования - else")
         auth.update_news_answer(answer=update.message.text, text=answer_text[0])
-        bot.send_message(chat_id=user_uid[0], text=answer_acq_user['RU'])
         bot.send_message(chat_id=user_uid[0], text=update.message.text)
+        bot.send_message(chat_id=user_uid[0], text=answer_acq_user['RU'])
         bot.send_message(chat_id=user.id, text=answer_sent_user['RU'])
+
     logger.info("Ответ руководителя %s: %s", user.first_name, update.message.text)
-    bot.send_message(chat_id=user.id, text=back2menu['RU'])
     return MENU
 
 
@@ -223,23 +230,16 @@ FLAG = True
 
 def callback(bot):
     while FLAG:
+        time.sleep(60*60*24)
         auth = db_hp.SQLighter('db.sqlite')
-        global current_time
         current_time = calendar.timegm(time.gmtime())
-        for i in range(auth.count_rows()):
-            user = auth.fetch_id()
-            if len(str(user[i][0])) >= 5:
-                rem_check = auth.check_time(user[i][0])[-1][0]
-                if int(current_time - rem_check) >= (60*60*24*7):
-                    bot.send_message(chat_id=user[i][0], text=reminder_text['RU'])
-                    logger.info("Новость написана давно %s", user[i][0])
-                    time.sleep(60 * 60 * 24)
-                    pass
-                else:
-                    time.sleep(1)
-                    pass
-            else:
-                pass
+        user = auth.fetch_id()
+        user_f = [user for user in user if len(str(user[0])) > 5]
+        user_list = [user[0] for user in user_f]
+        rem_check = [user for user in user_list if (current_time - auth.check_time(user)[-1][0]) > (60*60*24)]
+        for i in range(len(rem_check)):
+            bot.send_message(chat_id=rem_check[i], text=reminder_text['RU'])
+            logger.info("Новость написана давно %s", rem_check[i])
     pass
 
 
