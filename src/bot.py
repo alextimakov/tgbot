@@ -10,7 +10,7 @@ import src.dbhelper as db_hp
 
 channel_name = '@findaride'
 
-updater = Updater(token=config.token, request_kwargs={'read_timeout': 6, 'connect_timeout': 7})  # Токен API к Telegram
+updater = Updater(token=config.token)  # Токен API к Telegram
 dp = updater.dispatcher
 
 # Enable logging
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 # Global vars:
-START, MENU, SET_STATE, LOGIN, CHECK, NEWS, ATTACH, NO_ATTACH, SENT, ANSWER, RESULT = range(11)
+START, MENU, SET_STATE, LOGIN, CHECK, NEWS, ATTACH, NO_ATTACH, SENT, ANSWER, RESULT, WHERE = range(12)
 STATE = START
 unique_token = 0
 
@@ -137,11 +137,24 @@ def send_photo(bot, update):
     user = update.message.from_user
     auth = db_hp.SQLighter('db.sqlite')
     logger.info("%s отправил фотографию", user.first_name)
+    post_time = calendar.timegm(time.gmtime())
+    caption = update.message.caption
+    logger.info("Caption выглядит так %s", caption)
     photo = str(update.message.photo[-1].file_id)
     auth.update_news_attach(attach=photo, key=unique_token)
     bot.send_message(chat_id=update.message.chat_id, text=attach_acq['RU'])
-    update.message.reply_text(news_req['RU'])
-    return SENT
+    if caption:
+        boss_uid = auth.select_boss_id(user.id)[0]
+        bot.send_message(chat_id=boss_uid, text=new_news['RU'])
+        logger.info("%s отправил текст новости", user.first_name)
+        auth.update_news_text(time=post_time, text=caption, key=unique_token)
+        update.message.reply_text(news_acq['RU'])
+        bot.send_message(update.message.chat.id, 'Новость успешно отправлена руководителю!')
+        update.message.reply_text(back2menu['RU'])
+        return MENU
+    else:
+        update.message.reply_text(news_req['RU'])
+        return SENT
 
 
 # news without attachment
@@ -176,16 +189,20 @@ def send_news(bot, update):
 # answer procedure
 def answer(bot, update):
     user = update.message.from_user
-    logger.info("Руководитель проверил обновления %s", user.first_name)
+    logger.info("Руководитель проверил обновления %s", user.first_name)  # руководитель заходит в согласование
     auth = db_hp.SQLighter('db.sqlite')
-    user_uid = auth.select_user_id(user.id)
-    number_answers = auth.count_news(boss_id=user.id, status=0)-1
-    if user_uid:
-        if number_answers >= 0:
+    user_uid = auth.select_user_id(user.id)  # выбираем пользователей, у которых есть несогласованные новости
+    number_answers = auth.count_news(boss_id=user.id, status=0)  # чтобы начать проверять с самой ранней новости
+    if user_uid:  # для контроля, является ли пользователь руководителем и есть ли несогласованные новости
+        if number_answers > 0:  # доп проверка по кол-ву новостей
+            answer_text = auth.check_news(user.id)[-1 * number_answers]
+            checked_user = auth.select_id_by_news(text=answer_text[0])[0]
+            print(checked_user, answer_text[0], auth.select_user_by_id(id=checked_user))
             bot.send_message(chat_id=user.id, text=answer_pos['RU'])
             bot.send_message(chat_id=user.id,
-                             text='Новость получена от {}'.format(auth.select_user_by_id(id=user_uid[0])[0]))
-            bot.send_message(chat_id=user.id, text=''.join(auth.check_news(user.id)[-1*number_answers]))
+                             text='Новость получена от {}'
+                             .format(auth.select_user_by_id(id=checked_user)))
+            bot.send_message(chat_id=user.id, text=''.join(answer_text[0]))
             logger.info("1 шаг согласования - проверка")
             return RESULT
         else:
@@ -199,28 +216,55 @@ def answer(bot, update):
 
 def answer_result(bot, update):
     user = update.message.from_user
+    post_time = calendar.timegm(time.gmtime())
     auth = db_hp.SQLighter('db.sqlite')
-    user_uid = auth.select_user_id(user.id)
-    number_answers = auth.count_news(boss_id=user.id, status=0) - 1
+    number_answers = auth.count_news(boss_id=user.id, status=0)
     answer_text = auth.check_news(user.id)[-1 * number_answers]
+    checked_user = auth.select_id_by_news(text=answer_text[0])[0]
+    logger.info("Ответ руководителя %s: %s", user.first_name, update.message.text)
     if str(update.message.text) == 'ОК':
         logger.info("2 шаг согласования - OK")
         auth.update_news_status(status=1, text=answer_text[0])
+        auth.update_answer_time(time=post_time, text=answer_text[0])
         bot.send_message(chat_id=user.id, text=answer_sent_mods['RU'])
         bot.send_message(chat_id=user.id, text=back2menu['RU'])
+        bot.send_message(chat_id=checked_user, text=answer_sent_mods['RU'])
+        bot.send_message(chat_id=channel_name, text=answer_text[0])
+        if auth.fetch_file_id(text=answer_text[0])[0] != 0:
+            bot.send_photo(chat_id=channel_name, photo=auth.fetch_file_id(text=answer_text[0])[0])
+        else:
+            pass
+        return MENU
+    else:
+        logger.info("2 шаг согласования - else")
+        auth.update_news_answer(answer=update.message.text, text=answer_text[0])
+        auth.update_answer_time(time=post_time, text=answer_text[0])
+        bot.send_message(chat_id=user.id, text=answer_sent_choice['RU'])
+        return WHERE
+
+
+def answer_where(bot, update):
+    user = update.message.from_user
+    auth = db_hp.SQLighter('db.sqlite')
+    answer_time = auth.select_answer_time(boss_id=user.id)
+    time_list = sorted([i[0] for i in answer_time], reverse=True)
+    answer_text = auth.check_news_time(boss_id=user.id, answer_time=time_list[0])
+    comment = auth.check_answer(text=answer_text[0])
+    checked_user = auth.select_id_by_news(text=answer_text[0])[0]
+    if str(update.message.text) == 'МОД':
+        auth.update_news_status(status=1, text=answer_text[0])
+        bot.send_message(chat_id=user.id, text=answer_sent_mods['RU'])
+        bot.send_message(chat_id=user.id, text=back2menu['RU'])
+        bot.send_message(chat_id=checked_user, text=answer_sent_mods['RU'])
         bot.send_message(chat_id=channel_name, text=answer_text[0])
         if auth.fetch_file_id(text=answer_text[0])[0] != 0:
             bot.send_photo(chat_id=channel_name, photo=auth.fetch_file_id(text=answer_text[0])[0])
         else:
             pass
     else:
-        logger.info("2 шаг согласования - else")
-        auth.update_news_answer(answer=update.message.text, text=answer_text[0])
-        bot.send_message(chat_id=user_uid[0], text=update.message.text)
-        bot.send_message(chat_id=user_uid[0], text=answer_acq_user['RU'])
+        bot.send_message(chat_id=checked_user, text=answer_acq_user['RU'])
+        bot.send_message(chat_id=checked_user, text=comment)
         bot.send_message(chat_id=user.id, text=answer_sent_user['RU'])
-
-    logger.info("Ответ руководителя %s: %s", user.first_name, update.message.text)
     return MENU
 
 
@@ -233,21 +277,14 @@ def callback(bot):
         time.sleep(60*60*24)
         auth = db_hp.SQLighter('db.sqlite')
         current_time = calendar.timegm(time.gmtime())
-        user = auth.fetch_id()
+        user = auth.fetch_user_id()
         user_f = [user for user in user if len(str(user[0])) > 5]
         user_list = [user[0] for user in user_f]
-        rem_check = [user for user in user_list if (current_time - auth.check_time(user)[-1][0]) > (60*60*24)]
+        rem_check = [user for user in user_list if (current_time - auth.check_time(user)[-1][0]) > (60*60*24*7)]
         for i in range(len(rem_check)):
             bot.send_message(chat_id=rem_check[i], text=reminder_text['RU'])
             logger.info("Новость написана давно %s", rem_check[i])
     pass
-
-
-def help(bot, update):
-    user = update.message.from_user
-    logger.info("Пользователь {} просит помочь".format(user.first_name))
-    update.message.reply_text(text='Напишите сообщение',
-                              reply_markup=ReplyKeyboardRemove())
 
 
 def cancel(bot, update):
@@ -284,10 +321,11 @@ def main():
             SENT: [MessageHandler(Filters.text, send_news), CommandHandler('menu', menu)],
 
             RESULT: [MessageHandler(Filters.text, answer_result)],
+
+            WHERE: [MessageHandler(Filters.text, answer_where)]
         },
 
-        fallbacks=[CommandHandler('cancel', cancel),
-                   CommandHandler('help', help)]
+        fallbacks=[CommandHandler('cancel', cancel)]
     )
 
     dp.add_handler(conversation_handler)

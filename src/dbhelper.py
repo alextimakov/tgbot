@@ -49,6 +49,11 @@ class SQLighter:
             self.cursor.execute('UPDATE news_base SET answer = ? WHERE news_text = ?', (answer, text, ))
             self.connection.commit()
 
+    def update_answer_time(self, time, text):
+        with self.connection:
+            self.cursor.execute('UPDATE news_base SET answer_time = ? WHERE news_text = ?', (time, text, ))
+            self.connection.commit()
+
     def select_all(self):
         with self.connection:
             return self.cursor.execute('SELECT * FROM user_boss').fetchall()
@@ -62,9 +67,18 @@ class SQLighter:
             result = self.cursor.execute('SELECT user FROM user_boss WHERE user_id = ?', (id, )).fetchone()
             return result
 
+    def select_id_by_news(self, text):
+        with self.connection:
+            result = self.cursor.execute('SELECT user_id FROM news_base WHERE news_text = ?',
+                                         (text, )).fetchone()
+            return result
+
     def select_user_id(self, boss):
         with self.connection:
-            return self.cursor.execute('SELECT user_id FROM user_boss WHERE boss_id = :boss', {"boss": boss}).fetchone()
+            result = self.cursor.execute('SELECT user_id FROM news_base '
+                                         'WHERE boss_id = :boss AND status = 0 AND answer ISNULL',
+                                         {"boss": boss}).fetchall()
+            return result
 
     def select_boss(self):
         with self.connection:
@@ -80,8 +94,13 @@ class SQLighter:
 
     def select_person(self, cond):
         with self.connection:
-            return self.cursor.execute('SELECT * FROM user_boss WHERE user = :condition or boss = :condition',
+            return self.cursor.execute('SELECT * FROM user_boss WHERE user = :condition OR boss = :condition',
                                        {"condition": cond}).fetchone()
+
+    def select_answer_time(self, boss_id):
+        with self.connection:
+            return self.cursor.execute('SELECT answer_time FROM news_base WHERE boss_id = ? AND NOT answer_time ISNULL',
+                                       (boss_id, )).fetchall()
 
     def count_rows(self):
         with self.connection:
@@ -94,7 +113,7 @@ class SQLighter:
                                          (boss_id, status, )).fetchall()
             return len(result)
 
-    def fetch_id(self):
+    def fetch_user_id(self):
         with self.connection:
             result = self.cursor.execute('SELECT user_id FROM user_boss').fetchall()
             return result
@@ -106,11 +125,22 @@ class SQLighter:
 
     def check_news(self, boss_id):
         with self.connection:
-            return self.cursor.execute('SELECT news_text FROM news_base WHERE boss_id = ?', (boss_id, )).fetchall()
+            return self.cursor.execute('SELECT news_text FROM news_base WHERE boss_id = ? AND status = 0'
+                                       , (boss_id, )).fetchall()
 
     def check_time(self, user):
         with self.connection:
             return self.cursor.execute('SELECT time FROM news_base WHERE user_id = ?', (user, )).fetchall()
+
+    def check_answer(self, text):
+        with self.connection:
+            result = self.cursor.execute('SELECT answer FROM news_base WHERE news_text = ?', (text, )).fetchone()
+            return result
+
+    def check_news_time(self, boss_id, answer_time):
+        with self.connection:
+            return self.cursor.execute('SELECT news_text FROM news_base WHERE boss_id = ? AND answer_time = ?',
+                                       (boss_id, answer_time, )).fetchone()
 
     def close(self):
         self.connection.close()
