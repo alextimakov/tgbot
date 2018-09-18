@@ -75,8 +75,7 @@ class SQLighter:
 
     def select_user_id(self, boss):
         with self.connection:
-            result = self.cursor.execute('SELECT user_id FROM news_base '
-                                         'WHERE boss_id = :boss AND status = 0 AND answer ISNULL',
+            result = self.cursor.execute('SELECT user_id FROM user_boss WHERE boss_id = :boss',
                                          {"boss": boss}).fetchall()
             return result
 
@@ -109,7 +108,7 @@ class SQLighter:
 
     def count_news(self, boss_id, status):
         with self.connection:
-            result = self.cursor.execute('SELECT * FROM news_base WHERE boss_id = ? and status = ?',
+            result = self.cursor.execute('SELECT * FROM news_base WHERE boss_id = ? AND status = ? AND answer IS NULL',
                                          (boss_id, status, )).fetchall()
             return len(result)
 

@@ -101,7 +101,11 @@ def check(bot, update):
     for i in range(len(auth.select_boss())):
         all_bosses.extend(auth.select_boss()[i])
     if auth.select_person(uid):
-        if uid in all_users:
+        if uid in all_users and uid in all_bosses:
+            logger.info("Новый uid сотрудника-руководителя")
+            auth.update_user(user.id, uid)
+            auth.update_boss(user.id, uid)
+        elif uid in all_users:
             logger.info("Новый uid сотрудника")
             auth.update_user(user.id, uid)
         elif uid in all_bosses:
@@ -129,7 +133,7 @@ def news(bot, update):
         auth.update_news_start(id=unique_token, status=0, user_id=user.id, boss_id=boss_uid[0])
     else:
         bot.send_message(chat_id=update.message.chat_id, text=user_not_found['RU'])
-    return
+    return ATTACH
 
 
 # news with attachment
@@ -139,7 +143,6 @@ def send_photo(bot, update):
     logger.info("%s отправил фотографию", user.first_name)
     post_time = calendar.timegm(time.gmtime())
     caption = update.message.caption
-    logger.info("Caption выглядит так %s", caption)
     photo = str(update.message.photo[-1].file_id)
     auth.update_news_attach(attach=photo, key=unique_token)
     bot.send_message(chat_id=update.message.chat_id, text=attach_acq['RU'])
@@ -147,7 +150,7 @@ def send_photo(bot, update):
         boss_uid = auth.select_boss_id(user.id)[0]
         bot.send_message(chat_id=boss_uid, text=new_news['RU'])
         logger.info("%s отправил текст новости", user.first_name)
-        auth.update_news_text(time=post_time, text=caption, key=unique_token)
+        auth.update_news_text(time=post_time, text=str(caption), key=unique_token)
         update.message.reply_text(news_acq['RU'])
         bot.send_message(update.message.chat.id, 'Новость успешно отправлена руководителю!')
         update.message.reply_text(back2menu['RU'])
@@ -166,7 +169,6 @@ def no_attachment(bot, update):
     boss_uid = auth.select_boss_id(user.id)
     if auth.select_boss_id(user.id):
         auth.update_news_start(id=unique_token, status=0, user_id=user.id, boss_id=boss_uid[0])
-        auth.update_news_attach(attach=0, key=unique_token)
     else:
         bot.send_message(chat_id=update.message.chat_id, text=user_not_found['RU'])
     return SENT
@@ -191,18 +193,21 @@ def answer(bot, update):
     user = update.message.from_user
     logger.info("Руководитель проверил обновления %s", user.first_name)  # руководитель заходит в согласование
     auth = db_hp.SQLighter('db.sqlite')
-    user_uid = auth.select_user_id(user.id)  # выбираем пользователей, у которых есть несогласованные новости
+    user_uid = auth.select_user_id(boss=user.id)  # выбираем пользователей, которые являются руководителями
     number_answers = auth.count_news(boss_id=user.id, status=0)  # чтобы начать проверять с самой ранней новости
-    if user_uid:  # для контроля, является ли пользователь руководителем и есть ли несогласованные новости
-        if number_answers > 0:  # доп проверка по кол-ву новостей
-            answer_text = auth.check_news(user.id)[-1 * number_answers]
+    if user_uid and number_answers > 0:  # для контроля, является ли пользователь руководителем и есть ли новости
+        answer_text = auth.check_news(user.id)[-1 * number_answers]
+        if answer_text:  # доп проверка по пустым новостям
             checked_user = auth.select_id_by_news(text=answer_text[0])[0]
-            print(checked_user, answer_text[0], auth.select_user_by_id(id=checked_user))
             bot.send_message(chat_id=user.id, text=answer_pos['RU'])
             bot.send_message(chat_id=user.id,
                              text='Новость получена от {}'
-                             .format(auth.select_user_by_id(id=checked_user)))
+                             .format(auth.select_user_by_id(id=checked_user)[0]))
             bot.send_message(chat_id=user.id, text=''.join(answer_text[0]))
+            if auth.fetch_file_id(text=answer_text[0])[0]:
+                bot.send_photo(chat_id=user.id, photo=str(auth.fetch_file_id(text=answer_text[0])[0]))
+            else:
+                pass
             logger.info("1 шаг согласования - проверка")
             return RESULT
         else:
@@ -222,16 +227,16 @@ def answer_result(bot, update):
     answer_text = auth.check_news(user.id)[-1 * number_answers]
     checked_user = auth.select_id_by_news(text=answer_text[0])[0]
     logger.info("Ответ руководителя %s: %s", user.first_name, update.message.text)
-    if str(update.message.text) == 'ОК':
+    if str(update.message.text) == 'ОК' or str(update.message.text) == 'OK':
         logger.info("2 шаг согласования - OK")
         auth.update_news_status(status=1, text=answer_text[0])
         auth.update_answer_time(time=post_time, text=answer_text[0])
         bot.send_message(chat_id=user.id, text=answer_sent_mods['RU'])
         bot.send_message(chat_id=user.id, text=back2menu['RU'])
         bot.send_message(chat_id=checked_user, text=answer_sent_mods['RU'])
-        bot.send_message(chat_id=channel_name, text=answer_text[0])
-        if auth.fetch_file_id(text=answer_text[0])[0] != 0:
-            bot.send_photo(chat_id=channel_name, photo=auth.fetch_file_id(text=answer_text[0])[0])
+        bot.send_message(chat_id=282167847, text=answer_text[0])
+        if auth.fetch_file_id(text=answer_text[0])[0]:
+            bot.send_photo(chat_id=282167847, photo=str(auth.fetch_file_id(text=answer_text[0])[0]))
         else:
             pass
         return MENU
@@ -249,16 +254,16 @@ def answer_where(bot, update):
     answer_time = auth.select_answer_time(boss_id=user.id)
     time_list = sorted([i[0] for i in answer_time], reverse=True)
     answer_text = auth.check_news_time(boss_id=user.id, answer_time=time_list[0])
-    comment = auth.check_answer(text=answer_text[0])
+    comment = str(auth.check_answer(text=answer_text[0])[0])
     checked_user = auth.select_id_by_news(text=answer_text[0])[0]
-    if str(update.message.text) == 'МОД':
+    if str(update.message.text) == 'М' or str(update.message.text) == 'M':
         auth.update_news_status(status=1, text=answer_text[0])
         bot.send_message(chat_id=user.id, text=answer_sent_mods['RU'])
         bot.send_message(chat_id=user.id, text=back2menu['RU'])
         bot.send_message(chat_id=checked_user, text=answer_sent_mods['RU'])
-        bot.send_message(chat_id=channel_name, text=answer_text[0])
-        if auth.fetch_file_id(text=answer_text[0])[0] != 0:
-            bot.send_photo(chat_id=channel_name, photo=auth.fetch_file_id(text=answer_text[0])[0])
+        bot.send_message(chat_id=282167847, text=answer_text[0])
+        if auth.fetch_file_id(text=answer_text[0])[0]:
+            bot.send_photo(chat_id=282167847, photo=str(auth.fetch_file_id(text=answer_text[0])[0]))
         else:
             pass
     else:
@@ -289,7 +294,7 @@ def callback(bot):
 
 def cancel(bot, update):
     user = update.message.from_user
-    logger.info("ПОльзователь {} прервал диалог.".format(user.first_name))
+    logger.info("Пользователь {} прервал диалог.".format(user.first_name))
     update.message.reply_text(text=cancel_text['RU'],
                               reply_markup=ReplyKeyboardRemove())
 
