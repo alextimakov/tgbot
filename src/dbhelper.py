@@ -39,6 +39,11 @@ class SQLighter:
             self.cursor.execute('UPDATE news_base SET time = ?, news_text = ? WHERE id = ?', (time, text, key, ))
             self.connection.commit()
 
+    def update_news_text_only(self, new_text, old_text):
+        with self.connection:
+            self.cursor.execute('UPDATE news_base SET news_text = ? WHERE news_text = ?', (new_text, old_text, ))
+            self.connection.commit()
+
     def update_news_status(self, status, text):
         with self.connection:
             self.cursor.execute('UPDATE news_base SET status = ? WHERE news_text = ?', (status, text, ))
@@ -112,9 +117,9 @@ class SQLighter:
                                          (boss_id, status, )).fetchall()
             return len(result)
 
-    def fetch_user_id(self):
+    def fetch_user_id_news(self):
         with self.connection:
-            result = self.cursor.execute('SELECT user_id FROM user_boss').fetchall()
+            result = self.cursor.execute('SELECT user_id FROM news_base').fetchall()
             return result
 
     def fetch_file_id(self, text):
