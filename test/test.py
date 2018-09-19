@@ -1,12 +1,12 @@
 import src.dbhelper as db_hp
-import calendar
-import time
-import shelve
+import src.shelve as shelve
+
 
 def main():
+    user = 125500294
     auth = db_hp.SQLighter('db.sqlite')
-    db = shelve.open("file2.txt")
-    db['user'] = ['ru', 'rn', 'ua']
+    shelve.set_state(str(user), shelve.States.MENU.value)
+    print()
 
 
 if __name__ == '__main__':

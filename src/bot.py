@@ -21,9 +21,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Global vars:
-START, MENU, SET_STATE, LOGIN, CHECK, NEWS, ATTACH, NO_ATTACH, SENT, ANSWER, RESULT, WHERE, ANSWER_MOD, ANSWER_USER = \
-    range(14)
-STATE = START
+STATE = States.START
 unique_token = 0
 
 
@@ -37,10 +35,10 @@ def start(bot, update):
     for i in range(len(all_ids)):
         if user.id in all_ids:
             bot.send_message(chat_id=update.message.chat_id, text=login_check_init_suc['RU'])
-            return MENU
+            return States.MENU
         else:
             login(bot, update)
-            return CHECK
+            return States.CHECStates.SET_STATEK
 
 
 def menu(bot, update):
@@ -56,31 +54,31 @@ def menu(bot, update):
     unique_token = update.message.message_id
     logger.info("Меню вызвано пользователем {}.".format(user.first_name))
     update.message.reply_text(menu_text['RU'], reply_markup=reply_markup)
-    return SET_STATE
+    return States.SET_STATE
 
 
 def set_state(bot, update):
     global STATE
-    STATE = SET_STATE
+    STATE = States.SET_STATE
     if update.message.text == login_menu['RU']:
-        STATE = LOGIN
+        STATE = States.LOGIN
         login(bot, update)
-        return CHECK
+        return States.CHECK
     elif update.message.text == attach_menu['RU']:
-        STATE = NEWS
+        STATE = States.NEWS
         news(bot, update)
-        return ATTACH
+        return States.ATTACH
     elif update.message.text == answer_menu['RU']:
-        STATE = ANSWER
+        STATE = States.ANSWER
         answer(bot, update)
-        return RESULT
+        return States.RESULT
     elif update.message.text == news_menu['RU']:
-        STATE = NO_ATTACH
+        STATE = States.NO_ATTACH
         no_attachment(bot, update)
-        return SENT
+        return States.SENT
     else:
-        STATE = MENU
-        return MENU
+        STATE = States.MENU
+        return States.MENU
 
 
 # login procedure
@@ -88,7 +86,7 @@ def login(bot, update):
     user = update.message.from_user
     logger.info("{} пытается авторизоваться.".format(user.first_name))
     update.message.reply_text(login_req['RU'])
-    return CHECK
+    return States.CHECK
 
 
 def check(bot, update):
@@ -117,11 +115,11 @@ def check(bot, update):
             pass
 
         bot.send_message(chat_id=update.message.chat_id, text=login_check_suc['RU'])
-        return MENU
+        return States.MENU
     else:
         bot.send_message(chat_id=update.message.chat_id, text=login_check_fail['RU'])
         bot.send_message(chat_id=update.message.chat_id, text=back2menu['RU'])
-        return CHECK
+        return States.CHECK
 
 
 # news procedure
@@ -135,7 +133,7 @@ def news(bot, update):
         auth.update_news_start(id=unique_token, status=0, user_id=user.id, boss_id=boss_uid[0])
     else:
         bot.send_message(chat_id=update.message.chat_id, text=user_not_found['RU'])
-    return ATTACH
+    return States.ATTACH
 
 
 # news with attachment
@@ -156,10 +154,10 @@ def send_photo(bot, update):
         update.message.reply_text(news_acq['RU'])
         bot.send_message(update.message.chat.id, 'Новость успешно отправлена руководителю!')
         update.message.reply_text(back2menu['RU'])
-        return MENU
+        return States.MENU
     else:
         update.message.reply_text(news_req['RU'])
-        return SENT
+        return States.SENT
 
 
 # news without attachment
@@ -173,7 +171,7 @@ def no_attachment(bot, update):
         auth.update_news_start(id=unique_token, status=0, user_id=user.id, boss_id=boss_uid[0])
     else:
         bot.send_message(chat_id=update.message.chat_id, text=user_not_found['RU'])
-    return SENT
+    return States.SENT
 
 
 def send_news(bot, update):
@@ -187,7 +185,7 @@ def send_news(bot, update):
     update.message.reply_text(news_acq['RU'])
     bot.send_message(update.message.chat.id, 'Новость успешно отправлена руководителю!')
     update.message.reply_text(back2menu['RU'])
-    return MENU
+    return States.MENU
 
 
 # answer procedure
@@ -218,18 +216,18 @@ def answer(bot, update):
 
                 update.message.reply_text(text='Выберите ОК, если новость согласована', reply_markup=reply_markup)
                 logger.info("1 шаг согласования - проверка")
-                return RESULT
+                return States.RESULT
             else:
                 bot.send_message(chat_id=user.id, text='Новость не содержит текста и приложений. Нажмите /cancel')
                 logger.info("1 шаг согласования - пустая новость")
-                return MENU
+                return States.MENU
         else:
             bot.send_message(chat_id=user.id, text=answer_neg['RU'])
             logger.info("1 шаг согласования - нет новостей")
-            return MENU
+            return States.MENU
     else:
         bot.send_message(chat_id=user.id, text=answer_rights['RU'])
-        return MENU
+        return States.MENU
 
 
 def answer_result(bot, update):
@@ -252,7 +250,7 @@ def answer_result(bot, update):
         else:
             pass
         bot.send_message(chat_id=channel_name, text=answer_text[0])
-        return MENU
+        return States.MENU
     else:
         logger.info("2 шаг согласования - else")
         keyboard = [['Модератор', 'Сотрудник']]
@@ -266,17 +264,17 @@ def answer_result(bot, update):
         update.message.reply_text(
             text='Нажмите Модератор, если хотите изменить новость самостоятельно и сразу отправить её модератору\n'
                  'Нажмите Сотрудник, если хотите отправить комментарий сотруднику', reply_markup=reply_markup)
-        return WHERE
+        return States.WHERE
 
 
 def answer_where(bot, update):
     user = update.message.from_user
     if update.message.text == 'Модератор':
         bot.send_message(chat_id=user.id, text='Введите изменённый текст новости для отправки модератору')
-        return ANSWER_MOD
+        return States.ANSWER_MOD
     else:
         bot.send_message(chat_id=user.id, text='Введите изменённый текст новости для отправки сотруднику')
-        return ANSWER_USER
+        return States.ANSWER_USER
 
 
 def answer_mod(bot, update):
@@ -300,7 +298,7 @@ def answer_mod(bot, update):
     else:
         pass
     bot.send_message(chat_id=channel_name, text=update.message.text)
-    return MENU
+    return States.MENU
 
 
 def answer_user(bot, update):
@@ -317,7 +315,7 @@ def answer_user(bot, update):
     bot.send_message(chat_id=user.id, text=answer_sent_user['RU'])
     bot.send_message(chat_id=user.id, text='Непроверенных новостей: {}'
                      .format(auth.count_news(boss_id=user.id, status=0)))
-    return MENU
+    return States.MENU
 
 
 # def answer(bot, update):
@@ -344,10 +342,10 @@ def answer_user(bot, update):
 #         else:
 #             bot.send_message(chat_id=user.id, text=answer_neg['RU'])
 #             logger.info("1 шаг согласования - нет новостей")
-#             return MENU
+#             return States.MENU
 #     else:
 #         bot.send_message(chat_id=user.id, text=answer_rights['RU'])
-#         return MENU
+#         return States.MENU
 
 
 # def answer_result(bot, update):
@@ -370,7 +368,7 @@ def answer_user(bot, update):
 #             bot.send_photo(chat_id=channel_name, photo=str(auth.fetch_file_id(text=answer_text[0])[0]))
 #         else:
 #             pass
-#         return MENU
+#         return States.MENU
 #     else:
 #         logger.info("2 шаг согласования - else")
 #         auth.update_news_answer(answer=update.message.text, text=answer_text[0])
@@ -401,7 +399,7 @@ def answer_user(bot, update):
 #         bot.send_message(chat_id=checked_user, text=answer_acq_user['RU'])
 #         bot.send_message(chat_id=checked_user, text=comment)
 #         bot.send_message(chat_id=user.id, text=answer_sent_user['RU'])
-#     return MENU
+#     return States.MENU
 
 # general functions
 FLAG = True
@@ -449,27 +447,27 @@ def main():
         entry_points=[CommandHandler('start', start), CommandHandler('menu', menu)],
 
         states={
-            MENU: [CommandHandler('menu', menu)],
+            States.MENU: [CommandHandler('menu', menu)],
 
-            SET_STATE: [RegexHandler(
+            States.SET_STATE: [RegexHandler(
                         '^({}|{}|{}|{})$'.format(
                             login_menu['RU'], news_menu['RU'], answer_menu['RU'], attach_menu['RU']), set_state)],
 
-            CHECK: [MessageHandler(Filters.text, check), CommandHandler('menu', menu)],
+            States.CHECK: [MessageHandler(Filters.text, check), CommandHandler('menu', menu)],
 
-            ATTACH: [MessageHandler(Filters.photo, send_photo), CommandHandler('send_news', send_news)],
+            States.ATTACH: [MessageHandler(Filters.photo, send_photo), CommandHandler('send_news', send_news)],
 
-            NO_ATTACH: [MessageHandler(Filters.text, no_attachment), CommandHandler('send_news', send_news)],
+            States.NO_ATTACH: [MessageHandler(Filters.text, no_attachment), CommandHandler('send_news', send_news)],
 
-            SENT: [MessageHandler(Filters.text, send_news), CommandHandler('menu', menu)],
+            States.SENT: [MessageHandler(Filters.text, send_news), CommandHandler('menu', menu)],
 
-            RESULT: [MessageHandler(Filters.text, answer_result)],
+            States.RESULT: [MessageHandler(Filters.text, answer_result)],
 
-            WHERE: [MessageHandler(Filters.text, answer_where)],
+            States.WHERE: [MessageHandler(Filters.text, answer_where)],
 
-            ANSWER_MOD: [MessageHandler(Filters.text, answer_mod)],
+            States.ANSWER_MOD: [MessageHandler(Filters.text, answer_mod)],
 
-            ANSWER_USER: [MessageHandler(Filters.text, answer_user)]
+            States.ANSWER_USER: [MessageHandler(Filters.text, answer_user)]
         },
 
         fallbacks=[CommandHandler('cancel', cancel)]
