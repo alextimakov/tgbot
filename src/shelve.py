@@ -1,22 +1,22 @@
-import shelve
+from vedis import Vedis
 from enum import Enum
 
-shelve_name = 'shelve.db'
+db_name = 'db.vdb'
+lost_name = 'lost.vdb'
 
 
-def get_current_state(user_id):
-    with shelve.open(shelve_name, writeback=True) as storage:
+def get_current_state(db, user_id):
+    with Vedis(db) as d:
         try:
-            return storage[user_id]
+            return d[user_id]
         except KeyError:
             return States.START.value
 
 
-# Сохраняем текущее «состояние» пользователя в нашу базу
-def set_state(user_id, value):
-    with shelve.open(shelve_name, writeback=True) as storage:
+def set_state(db, user_id, value):
+    with Vedis(db) as d:
         try:
-            storage[user_id] = value
+            d[user_id] = value
             return True
         except KeyError:
             return False
