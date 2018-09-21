@@ -10,10 +10,11 @@ import src.dbhelper as db_hp
 import src.config as config
 from src.scripts import *
 import src.shelve as sh
+# import socks
 
 channel_name = '@findaride'
 
-updater = Updater(token=config.token)  # Токен API к Telegram
+updater = Updater(token=config.token, request_kwargs=config.REQUEST_KWARGS)  # Токен API к Telegram
 dp = updater.dispatcher
 
 # Enable logging
@@ -152,13 +153,16 @@ def news(bot, update):
     sh.set_state(sh.db_name, user.id, sh.States.NEWS.value)
     update.message.reply_text(attach_req['RU'])
     auth = db_hp.SQLighter('db.sqlite')
-    boss_uid = auth.select_boss_id(user.id)
-    if auth.select_boss_id(user.id):
-        global unique_token
-        unique_token = update.message.message_id
-        auth.update_news_start(id=unique_token, status=0, user_id=user.id, boss_id=boss_uid[0])
+    if auth.select_boss_id(user.id):  # проверяем, есть ли в базе руководитель юзера
+        boss_uid = auth.select_boss_id(user.id)
+        if auth.select_user_id(boss_uid):  # проверяем, есть ли в базе сам юзер
+            global unique_token
+            unique_token = update.message.message_id
+            auth.insert_news_start(id=unique_token, status=0, user_id=user.id, boss_id=boss_uid[0])
+        else:
+            bot.send_message(chat_id=update.message.chat_id, text=user_not_found['RU'])
     else:
-        bot.send_message(chat_id=update.message.chat_id, text=user_not_found['RU'])
+        bot.send_message(chat_id=update.message.chat_id, text=boss_not_found['RU'])
     return sh.States.ATTACH
 
 
@@ -195,12 +199,16 @@ def no_attachment(bot, update):
     bot.send_message(chat_id=update.message.chat_id, text=news_req['RU'])
     auth = db_hp.SQLighter('db.sqlite')
     boss_uid = auth.select_boss_id(user.id)
-    if auth.select_boss_id(user.id):
-        global unique_token
-        unique_token = update.message.message_id
-        auth.update_news_start(id=unique_token, status=0, user_id=user.id, boss_id=boss_uid[0])
+    if auth.select_boss_id(user.id):  # проверяем, есть ли в базе руководитель юзера
+        boss_uid = auth.select_boss_id(user.id)
+        if auth.select_user_id(boss_uid):  # проверяем, есть ли в базе сам юзер
+            global unique_token
+            unique_token = update.message.message_id
+            auth.insert_news_start(id=unique_token, status=0, user_id=user.id, boss_id=boss_uid[0])
+        else:
+            bot.send_message(chat_id=update.message.chat_id, text=user_not_found['RU'])
     else:
-        bot.send_message(chat_id=update.message.chat_id, text=user_not_found['RU'])
+        bot.send_message(chat_id=update.message.chat_id, text=boss_not_found['RU'])
     return sh.States.SENT
 
 
@@ -398,9 +406,16 @@ def error(bot, update, error):
     logger.warning('Update "%s" caused error "%s"', update, error)
 
 
-# def auto_updater(bot):
-#     # send from all the users command /start
-#     bot.send_message(chat_id=bot.get_me()['id'], text='/start')
+def restart_updater(bot):
+    auth = db_hp.SQLighter('db.sqlite')
+    user = auth.fetch_user_id_news()
+    user_f = [user for user in user if len(str(user[0])) > 5]
+    user_list = list(set([user[0] for user in user_f]))
+    if user_list:
+        for i in range(len(user_list)):
+            bot.send_message(chat_id=user_list[i], text=repeater_update['RU'])
+    else:
+        pass
 
 
 def start_collector(bot):
@@ -408,11 +423,25 @@ def start_collector(bot):
     data = json.loads(str(a))
     if len(data['result']) > 0:
         for i in range(len(data['result'])):
-            bot.send_message(chat_id=int(data['result'][i]['message']['from']['id']), text=sent_repeat['RU'])
-            bot.send_message(chat_id=int(data['result'][i]['message']['from']['id']),
-                             text=str(data['result'][i]['message']['text']))
-            sh.set_state(sh.lost_name, str(data['result'][i]['message']['from']['id']),
-                         str(data['result'][i]['message']['text']))
+            auth = db_hp.SQLighter('db.sqlite')
+            unique_id = int(data['result'][i]['message']['message_id'])
+            cur_time = int(data['result'][i]['message']['date'])
+            user_id = int(data['result'][i]['message']['from']['id'])
+            bot.send_message(chat_id=user_id, text=sent_repeat['RU'])
+            try:
+                news_text = str(data['result'][i]['message']['text'])
+                bot.send_message(chat_id=user_id, text=news_text)
+                auth.insert_lost_news(unique_id, cur_time, user_id, news_text=news_text, file_id=None)
+            except KeyError:
+                try:
+                    photo = str(data['result'][i]['message']['photo'][-1]['file_id'])
+                    bot.send_photo(chat_id=user_id, photo=photo)
+                    auth.insert_lost_news(unique_id, cur_time, user_id, news_text=None, file_id=photo)
+                except KeyError:
+                    try:
+                        auth.insert_lost_news(unique_id, cur_time, user_id, news_text=None, file_id=None)
+                    except KeyError:
+                        pass
     else:
         pass
 
@@ -458,7 +487,7 @@ def main():
 
 if __name__ == '__main__':
     bot = updater.bot
-    # auto_updater(bot)
+    restart_updater(bot)
     start_collector(bot)
     main()
     p = Process(target=callback, args=(bot, ))

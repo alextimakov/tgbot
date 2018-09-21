@@ -1,18 +1,37 @@
-# import src.dbhelper as db_hp
+import src.dbhelper as db_hp
+import time
+import calendar
+from multiprocessing import Process
+# import json
+# from src.scripts import *
+# from telegram.utils import request
+# import src.config as config
 
-data = {'ok': True, 'result': [{'update_id': 472405061, 'message': {'message_id': 5469, 'from': {'id': 125500294,
-        'is_bot': False, 'first_name': 'Александр', 'username': 'alextimakov', 'language_code': 'ru-RU'},
-        'chat': {'id': 125500294, 'first_name': 'Александр', 'username': 'alextimakov', 'type': 'private'},
-        'date': 1537456498, 'text': 'timakov'}},
-                               {'update_id': 472405062, 'message': {'message_id': 5470, 'from': {'id': 125500294,
-        'is_bot': False, 'first_name': 'Александр', 'username': 'alextimakov', 'language_code': 'ru-RU'},
-        'chat': {'id': 125500294, 'first_name': 'Александр', 'username': 'alextimakov', 'type': 'private'},
-        'date': 1537456608, 'text': 'timakov'}}]}
+FLAG = True
 
 
 def main():
-    print(len(data['result'][0]['message']['from']['id']))
+    while FLAG:
+        time.sleep(1)
+        auth = db_hp.SQLighter('db.sqlite')
+        current_time = calendar.timegm(time.gmtime())
+        user = auth.fetch_user_id_news()
+        user_f = [user for user in user if len(str(user[0])) > 5]
+        user_list = [user[0] for user in user_f]
+        if user_list:
+            print(auth.check_time(user_list[0])[-1][0])
+            rem_check = [user for user in user_list]
+            print(rem_check)
+            if rem_check:
+                for i in range(len(rem_check)):
+                    print(rem_check[i])
+            else:
+                pass
+        else:
+            pass
+    pass
 
 
 if __name__ == '__main__':
-    main()
+    p = Process(target=main, args=())
+    p.start()

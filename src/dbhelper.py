@@ -23,7 +23,7 @@ class SQLighter:
                                 {"value": value, "cond": cond})
             self.connection.commit()
 
-    def update_news_start(self, id, status, user_id, boss_id):
+    def insert_news_start(self, id, status, user_id, boss_id):
         with self.connection:
             self.cursor.execute('INSERT INTO news_base (id, status, user_id, boss_id) VALUES (?,?,?,?)',
                                 (id, status, user_id, boss_id))
@@ -57,6 +57,12 @@ class SQLighter:
     def update_answer_time(self, time, text):
         with self.connection:
             self.cursor.execute('UPDATE news_base SET answer_time = ? WHERE news_text = ?', (time, text, ))
+            self.connection.commit()
+
+    def insert_lost_news(self, id, time, user_id, news_text, file_id):
+        with self.connection:
+            self.cursor.execute('INSERT INTO lost_news (id, time, user_id, news_text, file_id) VALUES (?,?,?,?,?)',
+                                (id, time, user_id, news_text, file_id, ))
             self.connection.commit()
 
     def select_all(self):
@@ -134,7 +140,8 @@ class SQLighter:
 
     def check_time(self, user):
         with self.connection:
-            return self.cursor.execute('SELECT time FROM news_base WHERE user_id = ?', (user, )).fetchall()
+            result = self.cursor.execute('SELECT time FROM news_base WHERE user_id = ?', (user, )).fetchall()
+            return result
 
     def check_answer(self, text):
         with self.connection:
