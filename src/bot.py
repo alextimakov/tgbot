@@ -151,13 +151,13 @@ def news(bot, update):
     user = update.message.from_user
     logger.info("%s начал писать новость с приложением", user.first_name)
     sh.set_state(sh.db_name, user.id, sh.States.NEWS.value)
-    update.message.reply_text(attach_req['RU'])
     auth = db_hp.SQLighter('db.sqlite')
-    if auth.select_boss_id(user.id):  # проверяем, есть ли в базе руководитель юзера
+    if auth.select_boss_id(user.id)[0]:  # проверяем, есть ли в базе руководитель юзера
         boss_uid = auth.select_boss_id(user.id)
-        if auth.select_user_id(boss_uid):  # проверяем, есть ли в базе сам юзер
+        if auth.select_user_id(boss_uid[0]):  # проверяем, есть ли в базе сам юзер
             global unique_token
             unique_token = update.message.message_id
+            bot.send_message(chat_id=update.message.chat_id, text=attach_req['RU'])
             auth.insert_news_start(id=unique_token, status=0, user_id=user.id, boss_id=boss_uid[0])
         else:
             bot.send_message(chat_id=update.message.chat_id, text=user_not_found['RU'])
@@ -196,14 +196,13 @@ def no_attachment(bot, update):
     user = update.message.from_user
     logger.info("{} начал писать новость без приложения.".format(user.first_name))
     sh.set_state(sh.db_name, user.id, sh.States.NO_ATTACH.value)
-    bot.send_message(chat_id=update.message.chat_id, text=news_req['RU'])
     auth = db_hp.SQLighter('db.sqlite')
-    boss_uid = auth.select_boss_id(user.id)
-    if auth.select_boss_id(user.id):  # проверяем, есть ли в базе руководитель юзера
+    if auth.select_boss_id(user.id)[0]:  # проверяем, есть ли в базе руководитель юзера
         boss_uid = auth.select_boss_id(user.id)
-        if auth.select_user_id(boss_uid):  # проверяем, есть ли в базе сам юзер
+        if auth.select_user_id(boss_uid[0]):  # проверяем, есть ли в базе сам юзер
             global unique_token
             unique_token = update.message.message_id
+            bot.send_message(chat_id=update.message.chat_id, text=news_req['RU'])
             auth.insert_news_start(id=unique_token, status=0, user_id=user.id, boss_id=boss_uid[0])
         else:
             bot.send_message(chat_id=update.message.chat_id, text=user_not_found['RU'])
@@ -371,14 +370,15 @@ FLAG = True
 
 def callback(bot):
     while FLAG:
-        time.sleep(60*60*24)
+        time.sleep(60*60*6)
         auth = db_hp.SQLighter('db.sqlite')
         current_time = calendar.timegm(time.gmtime())
         user = auth.fetch_user_id_news()
         user_f = [user for user in user if len(str(user[0])) > 5]
-        user_list = [user[0] for user in user_f]
+        user_list = list(set([user[0] for user in user_f]))
         if user_list:
-            rem_check = [user for user in user_list if (current_time - auth.check_time(user)[-1][0]) > (60*60*24*7)]
+            rem_check = [user for user in user_list if auth.check_time(user)[-1][0] is not None
+                         and (current_time - auth.check_time(user)[-1][0]) > (60*60*24*7)]
             if rem_check:
                 for i in range(len(rem_check)):
                     bot.send_message(chat_id=rem_check[i], text=reminder_text['RU'])
