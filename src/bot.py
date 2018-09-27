@@ -10,9 +10,8 @@ import src.dbhelper as db_hp
 import src.config as config
 from src.scripts import *
 import src.shelve as sh
-# import socks
 
-channel_name = '@findaride'
+channel_name = '@findaride'  # тестовый канал
 
 updater = Updater(token=config.token, request_kwargs=config.REQUEST_KWARGS)  # Токен API к Telegram
 dp = updater.dispatcher
@@ -77,7 +76,7 @@ def menu(bot, update):
                                        resize_keyboard=True)
 
     user = update.message.from_user
-    logger.info("Меню вызвано пользователем {}.".format(user.first_name))
+    logger.info("Меню вызвано пользователем {}.".format(user.id))
     sh.set_state(sh.db_name, user.id, sh.States.MENU.value)
     update.message.reply_text(menu_text['RU'], reply_markup=reply_markup)
     return sh.States.SET_STATE
@@ -106,7 +105,7 @@ def set_state(bot, update):
 # login procedure
 def login(bot, update):
     user = update.message.from_user
-    logger.info("{} пытается авторизоваться.".format(user.first_name))
+    logger.info("{} пытается авторизоваться.".format(user.id))
     sh.set_state(sh.db_name, user.id, sh.States.LOGIN.value)
     update.message.reply_text(login_req['RU'])
     return sh.States.CHECK
@@ -114,7 +113,7 @@ def login(bot, update):
 
 def check(bot, update):
     user = update.message.from_user
-    logger.info("{} отправил логин.".format(user.first_name))
+    logger.info("{} отправил логин.".format(user.id))
     sh.set_state(sh.db_name, user.id, sh.States.CHECK.value)
     uid = update.message.text.lower()
     auth = db_hp.SQLighter('db.sqlite')
@@ -149,7 +148,7 @@ def check(bot, update):
 # news procedure
 def news(bot, update):
     user = update.message.from_user
-    logger.info("%s начал писать новость с приложением", user.first_name)
+    logger.info("%s начал писать новость с приложением", user.id)
     sh.set_state(sh.db_name, user.id, sh.States.NEWS.value)
     auth = db_hp.SQLighter('db.sqlite')
     if auth.select_boss_id(user.id)[0]:  # проверяем, есть ли в базе руководитель юзера
@@ -170,7 +169,7 @@ def news(bot, update):
 def send_photo(bot, update):
     user = update.message.from_user
     auth = db_hp.SQLighter('db.sqlite')
-    logger.info("%s отправил фотографию", user.first_name)
+    logger.info("%s отправил фотографию", user.id)
     sh.set_state(sh.db_name, user.id, sh.States.ATTACH.value)
     post_time = calendar.timegm(time.gmtime())
     caption = update.message.caption
@@ -180,7 +179,7 @@ def send_photo(bot, update):
     if caption:
         boss_uid = auth.select_boss_id(user.id)[0]
         bot.send_message(chat_id=boss_uid, text=new_news['RU'])
-        logger.info("%s отправил текст новости", user.first_name)
+        logger.info("%s отправил текст новости", user.id)
         auth.update_news_text(time=post_time, text=str(caption), key=unique_token)
         update.message.reply_text(news_acq['RU'])
         bot.send_message(update.message.chat.id, 'Новость успешно отправлена руководителю!')
@@ -194,7 +193,7 @@ def send_photo(bot, update):
 # news without attachment
 def no_attachment(bot, update):
     user = update.message.from_user
-    logger.info("{} начал писать новость без приложения.".format(user.first_name))
+    logger.info("{} начал писать новость без приложения.".format(user.id))
     sh.set_state(sh.db_name, user.id, sh.States.NO_ATTACH.value)
     auth = db_hp.SQLighter('db.sqlite')
     if auth.select_boss_id(user.id)[0]:  # проверяем, есть ли в базе руководитель юзера
@@ -216,7 +215,7 @@ def send_news(bot, update):
     auth = db_hp.SQLighter('db.sqlite')
     boss_uid = auth.select_boss_id(user.id)[0]
     bot.send_message(chat_id=boss_uid, text=new_news['RU'])
-    logger.info("%s отправил текст новости", user.first_name)
+    logger.info("%s отправил текст новости", user.id)
     sh.set_state(sh.db_name, user.id, sh.States.SENT.value)
     post_time = calendar.timegm(time.gmtime())
     auth.update_news_text(time=post_time, text=update.message.text, key=unique_token)
@@ -229,7 +228,7 @@ def send_news(bot, update):
 # answer procedure
 def answer(bot, update):
     user = update.message.from_user
-    logger.info("Руководитель проверил обновления %s", user.first_name)  # руководитель заходит в согласование
+    logger.info("Руководитель проверил обновления %s", user.id)  # руководитель заходит в согласование
     sh.set_state(sh.db_name, user.id, sh.States.ANSWER.value)
     auth = db_hp.SQLighter('db.sqlite')
     user_uid = auth.select_user_id(boss=user.id)  # выбираем пользователей, которые являются руководителями
@@ -237,7 +236,8 @@ def answer(bot, update):
     if user_uid:  # для контроля, является ли пользователь руководителем и есть ли новости
         if number_answers > 0:  # доп проверка по пустым новостям
             answer_text = auth.check_news(user.id)[-1 * number_answers]
-            if answer_text:
+            if answer_text[0]:
+                print(answer_text)
                 checked_user = auth.select_id_by_news(text=answer_text[0])[0]
                 bot.send_message(chat_id=user.id,
                                  text='Новость получена от {}'
@@ -274,42 +274,46 @@ def answer_result(bot, update):
     post_time = calendar.timegm(time.gmtime())
     auth = db_hp.SQLighter('db.sqlite')
     number_answers = auth.count_news(boss_id=user.id, status=0)
-    answer_text = auth.check_news(user.id)[-1 * number_answers]
-    checked_user = auth.select_id_by_news(text=answer_text[0])[0]
-    logger.info("Ответ руководителя %s: %s", user.first_name, update.message.text)
-    sh.set_state(sh.db_name, user.id, sh.States.RESULT.value)
-    if update.message.text == 'ОК':
-        logger.info("2 шаг согласования - OK")
-        auth.update_news_status(status=1, text=answer_text[0])
-        auth.update_answer_time(time=post_time, text=answer_text[0])
-        bot.send_message(chat_id=user.id, text=answer_sent_mods['RU'])
-        bot.send_message(chat_id=user.id, text=back2menu['RU'])
-        bot.send_message(chat_id=checked_user, text=answer_sent_mods['RU'])
-        if auth.fetch_file_id(text=answer_text[0])[0]:
-            bot.send_photo(chat_id=channel_name, photo=str(auth.fetch_file_id(text=answer_text[0])[0]))
+    if number_answers > 0:
+        answer_text = auth.check_news(user.id)[-1 * number_answers]
+        checked_user = auth.select_id_by_news(text=answer_text[0])[0]
+        logger.info("Ответ руководителя %s: %s", user.id, update.message.text)
+        sh.set_state(sh.db_name, user.id, sh.States.RESULT.value)
+        if update.message.text == 'ОК':
+            logger.info("2 шаг согласования - OK")
+            auth.update_news_status(status=1, text=answer_text[0])
+            auth.update_answer_time(time=post_time, text=answer_text[0])
+            bot.send_message(chat_id=user.id, text=answer_sent_mods['RU'])
+            bot.send_message(chat_id=user.id, text=back2menu['RU'])
+            bot.send_message(chat_id=checked_user, text=answer_sent_mods['RU'])
+            if auth.fetch_file_id(text=answer_text[0])[0]:
+                bot.send_photo(chat_id=channel_name, photo=str(auth.fetch_file_id(text=answer_text[0])[0]))
+            else:
+                pass
+            bot.send_message(chat_id=channel_name, text=answer_text[0])
+            return sh.States.MENU
         else:
-            pass
-        bot.send_message(chat_id=channel_name, text=answer_text[0])
-        return sh.States.MENU
+            logger.info("2 шаг согласования - else")
+            keyboard = [['Модератор', 'Сотрудник']]
+
+            reply_markup = ReplyKeyboardMarkup(keyboard,
+                                               one_time_keyboard=True,
+                                               resize_keyboard=True)
+
+            user = update.message.from_user
+            logger.info("Меню модератора вызвано пользователем {}.".format(user.id))
+            update.message.reply_text(
+                text='Нажмите Модератор, если хотите изменить новость самостоятельно и сразу отправить её модератору\n'
+                     'Нажмите Сотрудник, если хотите отправить комментарий сотруднику', reply_markup=reply_markup)
+            return sh.States.WHERE
     else:
-        logger.info("2 шаг согласования - else")
-        keyboard = [['Модератор', 'Сотрудник']]
-
-        reply_markup = ReplyKeyboardMarkup(keyboard,
-                                           one_time_keyboard=True,
-                                           resize_keyboard=True)
-
-        user = update.message.from_user
-        logger.info("Меню модератора вызвано пользователем {}.".format(user.first_name))
-        update.message.reply_text(
-            text='Нажмите Модератор, если хотите изменить новость самостоятельно и сразу отправить её модератору\n'
-                 'Нажмите Сотрудник, если хотите отправить комментарий сотруднику', reply_markup=reply_markup)
-        return sh.States.WHERE
+        bot.send_message(chat_id=user.id, text=answer_neg['RU'])
+        return sh.States.MENU
 
 
 def answer_where(bot, update):
     user = update.message.from_user
-    logger.info("Руководитель {} выбирает, кому отправить комментарии.".format(user.first_name))
+    logger.info("Руководитель {} выбирает, кому отправить комментарии.".format(user.id))
     sh.set_state(sh.db_name, user.id, sh.States.WHERE.value)
     if update.message.text == 'Модератор':
         bot.send_message(chat_id=user.id, text='Введите изменённый текст новости для отправки модератору')
@@ -321,7 +325,7 @@ def answer_where(bot, update):
 
 def answer_mod(bot, update):
     user = update.message.from_user
-    logger.info("Руководитель {} отправил комментарии модератору.".format(user.first_name))
+    logger.info("Руководитель {} отправил комментарии модератору.".format(user.id))
     sh.set_state(sh.db_name, user.id, sh.States.ANSWER_MOD.value)
     post_time = calendar.timegm(time.gmtime())
     auth = db_hp.SQLighter('db.sqlite')
@@ -347,7 +351,7 @@ def answer_mod(bot, update):
 
 def answer_user(bot, update):
     user = update.message.from_user
-    logger.info("Руководитель {} отправил комментарии сотруднику.".format(user.first_name))
+    logger.info("Руководитель {} отправил комментарии сотруднику.".format(user.id))
     sh.set_state(sh.db_name, user.id, sh.States.ANSWER_USER.value)
     post_time = calendar.timegm(time.gmtime())
     auth = db_hp.SQLighter('db.sqlite')
@@ -370,7 +374,7 @@ FLAG = True
 
 def callback(bot):
     while FLAG:
-        time.sleep(60*60*6)
+        time.sleep(60*60*24)
         auth = db_hp.SQLighter('db.sqlite')
         current_time = calendar.timegm(time.gmtime())
         user = auth.fetch_user_id_news()
