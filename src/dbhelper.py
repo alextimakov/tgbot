@@ -84,7 +84,7 @@ class SQLighter:
                                          (text, )).fetchone()
             return result
 
-    def select_user_id(self, boss):
+    def select_user_id_by_boss_id(self, boss):
         with self.connection:
             result = self.cursor.execute('SELECT user_id FROM user_boss WHERE boss_id = ?',
                                          (boss, )).fetchall()
@@ -110,8 +110,8 @@ class SQLighter:
 
     def select_answer_time(self, boss_id):
         with self.connection:
-            return self.cursor.execute('SELECT answer_time FROM news_base WHERE boss_id = ? AND NOT answer_time ISNULL',
-                                       (boss_id, )).fetchall()
+            return self.cursor.execute('SELECT answer_time FROM news_base WHERE boss_id = ? '
+                                       'AND NOT answer_time IS NULL', (boss_id, )).fetchall()
 
     def count_rows(self):
         with self.connection:
@@ -120,8 +120,8 @@ class SQLighter:
 
     def count_news(self, boss_id, status):
         with self.connection:
-            result = self.cursor.execute('SELECT * FROM news_base WHERE boss_id = ? AND status = ? AND answer IS NULL',
-                                         (boss_id, status, )).fetchall()
+            result = self.cursor.execute('SELECT * FROM news_base WHERE boss_id = ? AND status = ? AND answer IS NULL'
+                                         ' AND news_text IS NOT NULL', (boss_id, status, )).fetchall()
             return len(result)
 
     def fetch_user_id_news(self):
@@ -133,6 +133,10 @@ class SQLighter:
         with self.connection:
             result = self.cursor.execute('SELECT file_id FROM news_base WHERE news_text = ?', (text, )).fetchone()
             return result
+
+    def check_auth(self, id):
+        with self.connection:
+            return self.cursor.execute('SELECT user_id FROM user_boss WHERE user_id = ?', (id, )).fetchall()
 
     def check_news(self, boss_id):
         with self.connection:
