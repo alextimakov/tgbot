@@ -6,7 +6,7 @@
 #
 certifi==2019.11.28       # via python-telegram-bot
 cffi==1.14.0              # via cryptography
-cryptography==2.8         # via python-telegram-bot
+cryptography==3.2         # via python-telegram-bot
 cython==0.29.15           # via vedis
 decorator==4.4.2          # via python-telegram-bot
 future==0.18.2            # via python-telegram-bot
